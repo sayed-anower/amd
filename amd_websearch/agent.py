@@ -19,12 +19,24 @@ from typing import Any, Sequence
 from .config import AppConfig
 from .evidence import Evidence, build_evidence
 from .guardrails import ANSWER_SCHEMA, build_answer, extract_json_object
-from .llm import LlmClient, LlmError, LlmResponse
+from .llm import LlamaClient, LlmError, LlmResponse
 from .prompts import GAP_SCHEMA, PLANNER_SCHEMA, load_prompt
 from .providers import build_provider
 from .providers.base import SearchResult
+from .textutil import tokenize
 
 _LINE_CLEAN_RE = re.compile(r"^[\s\-\*\d\.\)\#\(\[\"']+|[\"'\[\]]+$")
+_COMPLEX_MARKERS = (
+    " and ",
+    " vs ",
+    " versus ",
+    " compare ",
+    " difference ",
+    " both ",
+    " also ",
+    " plus ",
+    " or ",
+)
 
 
 class WebSearchAgent:
@@ -60,8 +72,28 @@ class WebSearchAgent:
         return obj if isinstance(obj, dict) else {}
 
     # ---------------------------------------------------------------- planner
+    def _needs_planner(self, query: str) -> bool:
+        """Skip the planner LLM call for simple lookups; it is the slowest
+        optional step and a direct query usually works better anyway."""
+        mode = (self.config.search.planner_mode or "auto").lower()
+        if mode == "off":
+            return False
+        if mode == "always":
+            return True
+        words = query.split()
+        if len(words) > self.config.search.planner_short_query_words:
+            return True
+        if query.count("?") > 1 or "\n" in query:
+            return True
+        low = f" {query.lower()} "
+        return any(marker in low for marker in _COMPLEX_MARKERS)
+
     def plan_queries(self, query: str) -> list[str]:
         """Ask the model which web queries to run (JSON-schema constrained)."""
+        if not self._needs_planner(query):
+            cleaned = self._clean_query(query)
+            return [cleaned] if cleaned else []
+
         messages = [
             {"role": "system", "content": self.planner_prompt},
             {"role": "user", "content": f"QUESTION: {query}\nQUERIES:"},
@@ -89,6 +121,8 @@ class WebSearchAgent:
         """Ask for one follow-up query when the evidence looks incomplete."""
         if self.config.search.max_rounds <= 1:
             return None
+        if self._evidence_coverage(query, evidence) >= self.config.budget.gap_min_coverage:
+            return None
         digest = "\n".join(
             f"[{e.index}] {e.title} | {e.url} | {e.text[:110]}" for e in evidence[:4]
         )
@@ -115,6 +149,17 @@ class WebSearchAgent:
         return gap
 
     # ----------------------------------------------------------------- search
+    @staticmethod
+    def _evidence_coverage(query: str, evidence: Sequence[Evidence]) -> float:
+        """Fraction of query keywords already present in the evidence."""
+        q = set(tokenize(query))
+        if not q:
+            return 1.0
+        found: set[str] = set()
+        for e in evidence:
+            found.update(tokenize(f"{e.title} {e.text}"))
+        return len(q & found) / len(q)
+
     def search_many(self, queries: Sequence[str]) -> tuple[list[SearchResult], list[str]]:
         """Run the queries in parallel; returns (results, errors)."""
         queries = [q for q in queries if q]
@@ -138,7 +183,7 @@ class WebSearchAgent:
                 elif res:
                     results.extend(res)
 
-        if not results and errors:
+        if not results:
             results, fallback_errors = self._fallback_search(queries)
             errors.extend(fallback_errors)
         return results, errors
@@ -222,6 +267,8 @@ class WebSearchAgent:
             max_snippets=self.config.budget.max_snippets,
             char_budget=self.config.budget.evidence_char_budget,
             snippet_char_limit=self.config.budget.snippet_char_limit,
+            dedupe_threshold=self.config.budget.dedupe_jaccard,
+            min_query_coverage=self.config.budget.min_result_coverage,
         )
         trace["evidence_ms"] = int((time.perf_counter() - t0) * 1000)
         trace["evidence"] = [
@@ -242,6 +289,8 @@ class WebSearchAgent:
                         max_snippets=self.config.budget.max_snippets,
                         char_budget=self.config.budget.evidence_char_budget,
                         snippet_char_limit=self.config.budget.snippet_char_limit,
+                        dedupe_threshold=self.config.budget.dedupe_jaccard,
+                        min_query_coverage=self.config.budget.min_result_coverage,
                     )
                     trace["raw_results"] = len(merged)
                 if more_errors:
@@ -270,6 +319,7 @@ class WebSearchAgent:
             evidence,
             max_words=self.config.budget.max_response_words,
             coverage_threshold=self.config.budget.ground_coverage_threshold,
+            max_sources=self.config.budget.max_sources,
         )
 
         if not evidence:

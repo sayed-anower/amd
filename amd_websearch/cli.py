@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .agent import WebSearchAgent
 from .config import AppConfig
-from .llm import LlmClient
+from .llm import LlamaClient
 from .providers import build_provider
 
 

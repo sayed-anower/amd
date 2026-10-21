@@ -94,31 +94,41 @@ def compress_snippet(text: str, query_tokens: Sequence[str], limit: int) -> str:
 def build_evidence(
     query: str,
     results: Sequence[SearchResult],
-    max_snippets: int = 6,
-    char_budget: int = 3200,
-    snippet_char_limit: int = 420,
+    max_snippets: int = 4,
+    char_budget: int = 1500,
+    snippet_char_limit: int = 360,
+    dedupe_threshold: float = 0.85,
+    min_query_coverage: float = 0.2,
 ) -> list[Evidence]:
     """Rank, compress and budget the retrieved results."""
-    results = dedupe(list(results))
+    results = dedupe(list(results), threshold=dedupe_threshold)
     if not results:
         return []
 
     qtokens = tokenize(query)
+    qset = set(qtokens)
     corpus = [tokenize(f"{r.title} {r.snippet}") for r in results]
     bm25 = BM25(corpus)
     scores = bm25.scores(qtokens)
 
     max_provider = max((r.score for r in results), default=0.0)
-    ranked = []
+    ranked: list[tuple[float, float, int, SearchResult]] = []
     for i, res in enumerate(results):
         provider_norm = (res.score / max_provider) if max_provider else 0.0
+        coverage = (len(qset & set(corpus[i])) / len(qset)) if qset else 1.0
         combined = scores[i] + 0.8 * provider_norm
-        ranked.append((combined, i, res))
+        ranked.append((combined, coverage, i, res))
     ranked.sort(key=lambda x: -x[0])
+
+    # Drop documents that share almost nothing with the question. This keeps
+    # unrelated facts out of the prompt (quality *and* prefill speed).
+    relevant = [item for item in ranked if item[1] >= min_query_coverage]
+    if not relevant:
+        relevant = ranked
 
     evidence: list[Evidence] = []
     used = 0
-    for combined, _, res in ranked:
+    for combined, _, _, res in relevant:
         if len(evidence) >= max_snippets:
             break
         remaining = char_budget - used

@@ -82,6 +82,8 @@ class SearchConfig:
     search_depth: str = "basic"          # basic | advanced
     max_sub_queries: int = 2
     max_rounds: int = 2
+    planner_mode: str = "auto"           # auto | always | off
+    planner_short_query_words: int = 10
     request_timeout: float = 30.0
     max_parallel_searches: int = 4
     include_raw_content: bool = False
@@ -100,14 +102,17 @@ class SearchConfig:
 class BudgetConfig:
     """Everything here trades answer quality against token burn."""
 
-    max_snippets: int = 6
-    evidence_char_budget: int = 3200
-    snippet_char_limit: int = 420
-    max_response_words: int = 60
-    planner_max_tokens: int = 64
-    answer_max_tokens: int = 200
-    gap_max_tokens: int = 40
-    ground_coverage_threshold: float = 0.55
+    max_snippets: int = 3
+    evidence_char_budget: int = 1000
+    snippet_char_limit: int = 280
+    max_response_words: int = 45
+    max_sources: int = 3
+    planner_max_tokens: int = 48
+    answer_max_tokens: int = 80
+    gap_max_tokens: int = 32
+    ground_coverage_threshold: float = 0.6
+    gap_min_coverage: float = 0.6
+    min_result_coverage: float = 0.2
     dedupe_jaccard: float = 0.85
 
 
@@ -142,6 +147,8 @@ class AppConfig:
                 search_depth=_env("TAVILY_SEARCH_DEPTH", "basic"),
                 max_sub_queries=_env_int("MAX_SUB_QUERIES", 2),
                 max_rounds=_env_int("MAX_ROUNDS", 2),
+                planner_mode=_env("PLANNER_MODE", "auto"),
+                planner_short_query_words=_env_int("PLANNER_SHORT_QUERY_WORDS", 10),
                 request_timeout=_env_float("SEARCH_TIMEOUT", 30.0),
                 max_parallel_searches=_env_int("MAX_PARALLEL_SEARCHES", 4),
                 include_raw_content=_env_bool("TAVILY_INCLUDE_RAW", False),
@@ -156,14 +163,17 @@ class AppConfig:
                 local_corpus_path=_env("LOCAL_CORPUS_PATH", str(REPO_ROOT / "corpus" / "amd_docs.jsonl")),
             ),
             budget=BudgetConfig(
-                max_snippets=_env_int("MAX_SNIPPETS", 6),
-                evidence_char_budget=_env_int("EVIDENCE_CHAR_BUDGET", 3200),
-                snippet_char_limit=_env_int("SNIPPET_CHAR_LIMIT", 420),
-                max_response_words=_env_int("MAX_RESPONSE_WORDS", 60),
-                planner_max_tokens=_env_int("PLANNER_MAX_TOKENS", 64),
-                answer_max_tokens=_env_int("ANSWER_MAX_TOKENS", 200),
-                gap_max_tokens=_env_int("GAP_MAX_TOKENS", 40),
-                ground_coverage_threshold=_env_float("GROUND_COVERAGE", 0.55),
+                max_snippets=_env_int("MAX_SNIPPETS", 3),
+                evidence_char_budget=_env_int("EVIDENCE_CHAR_BUDGET", 1000),
+                snippet_char_limit=_env_int("SNIPPET_CHAR_LIMIT", 280),
+                max_response_words=_env_int("MAX_RESPONSE_WORDS", 45),
+                max_sources=_env_int("MAX_SOURCES", 3),
+                planner_max_tokens=_env_int("PLANNER_MAX_TOKENS", 48),
+                answer_max_tokens=_env_int("ANSWER_MAX_TOKENS", 80),
+                gap_max_tokens=_env_int("GAP_MAX_TOKENS", 32),
+                ground_coverage_threshold=_env_float("GROUND_COVERAGE", 0.6),
+                gap_min_coverage=_env_float("GAP_MIN_COVERAGE", 0.6),
+                min_result_coverage=_env_float("MIN_RESULT_COVERAGE", 0.2),
             ),
             system_prompt_path=_env("SYSTEM_PROMPT_PATH", str(REPO_ROOT / "system-prompt.txt")),
             planner_prompt_path=_env("PLANNER_PROMPT_PATH", str(REPO_ROOT / "planner-prompt.txt")),

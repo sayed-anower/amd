@@ -3,3 +3,7 @@ models/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.env
+*.log
+*.pid
+trace.txt
