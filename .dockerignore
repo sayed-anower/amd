@@ -1,0 +1,12 @@
+.git
+.guidelines.md
+.env
+__pycache__
+*.pyc
+*.log
+*.pid
+trace.txt
+out/
+llama-bin/
+llama.cpp/
+tests/

@@ -90,7 +90,7 @@ class QdrantDocsProvider(SearchProvider):
 
         raise RuntimeError(
             "No embedding backend configured. Set QDRANT_EMBED_URL "
-            "(e.g. http://127.0.0.1:8099/v1/embeddings) or QDRANT_EMBEDDING_MODEL."
+            "(e.g. http://127.0.0.1:8001/v1/embeddings) or QDRANT_EMBEDDING_MODEL."
         )
 
     # ----------------------------------------------------------------- search

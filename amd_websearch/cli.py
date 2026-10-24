@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("query", nargs="*", help="the question to research")
     parser.add_argument("--provider", help="tavily | qdrant | local")
-    parser.add_argument("--base-url", help="llama.cpp server base url (default http://127.0.0.1:8099/v1)")
+    parser.add_argument("--base-url", help="llama.cpp server base url (default http://127.0.0.1:8001/v1)")
     parser.add_argument("--model", help="model name reported to llama.cpp")
     parser.add_argument("--max-rounds", type=int, help="max search rounds (1 disables the gap round)")
     parser.add_argument("--max-snippets", type=int, help="max evidence snippets")

@@ -57,7 +57,7 @@ def load_dotenv(path: str | os.PathLike[str] | None = None) -> None:
 
 @dataclass
 class LlmConfig:
-    base_url: str = "http://127.0.0.1:8099/v1"
+    base_url: str = "http://127.0.0.1:8001/v1"
     model: str = "qwen2.5-0.5b-instruct"
     api_key: str = ""
     timeout: float = 120.0
@@ -108,7 +108,7 @@ class BudgetConfig:
     max_response_words: int = 45
     max_sources: int = 3
     planner_max_tokens: int = 48
-    answer_max_tokens: int = 80
+    answer_max_tokens: int = 96
     gap_max_tokens: int = 32
     ground_coverage_threshold: float = 0.6
     gap_min_coverage: float = 0.6
@@ -132,7 +132,7 @@ class AppConfig:
             load_dotenv()
         return cls(
             llm=LlmConfig(
-                base_url=_env("LLM_BASE_URL", "http://127.0.0.1:8099/v1"),
+                base_url=_env("LLM_BASE_URL", "http://127.0.0.1:8001/v1"),
                 model=_env("LLM_MODEL", "qwen2.5-0.5b-instruct"),
                 api_key=_env("LLM_API_KEY", ""),
                 timeout=_env_float("LLM_TIMEOUT", 120.0),
@@ -169,7 +169,7 @@ class AppConfig:
                 max_response_words=_env_int("MAX_RESPONSE_WORDS", 45),
                 max_sources=_env_int("MAX_SOURCES", 3),
                 planner_max_tokens=_env_int("PLANNER_MAX_TOKENS", 48),
-                answer_max_tokens=_env_int("ANSWER_MAX_TOKENS", 80),
+                answer_max_tokens=_env_int("ANSWER_MAX_TOKENS", 96),
                 gap_max_tokens=_env_int("GAP_MAX_TOKENS", 32),
                 ground_coverage_threshold=_env_float("GROUND_COVERAGE", 0.6),
                 gap_min_coverage=_env_float("GAP_MIN_COVERAGE", 0.6),

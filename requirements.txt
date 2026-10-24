@@ -1,0 +1,3 @@
+# No third-party Python packages are required.
+# The agent, search providers, HTTP server and guardrails use the stdlib only.
+# Do NOT add torch here: the ROCm build comes from the base image.

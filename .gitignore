@@ -1,9 +1,25 @@
+.guidelines.md
+
+# model weights - never commit
+model/*.gguf
 models/
 *.gguf
+
+# python
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# local secrets / runtime artifacts
 .env
 *.log
 *.pid
 trace.txt
+out/
+
+# prebuilt llama.cpp binaries (fetch with scripts/fetch_llama.sh)
+llama-bin/
+llama.cpp/
+
+# submission archives
+*.zip

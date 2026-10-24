@@ -54,6 +54,40 @@ question
 [guardrails]  JSON repair -> grounding -> source validation -> 45-word cap
 ```
 
+## Project layout
+
+```text
+Dockerfile              ROCm base, prebuilt llama.cpp, asserts ROCm torch
+run.sh                  starts warm llama-server on :8001, runs the batch
+app/
+  main.py               /data/questions.jsonl -> /output/answers.jsonl
+  search.py             Tavily | Qdrant | local provider selection
+  rag.py                evidence engine + llama.cpp client entry points
+  guardrails.py         final JSON/word/source contract check
+  local_search.py       offline fallback (works with --network none)
+amd_websearch/          production agent (planner, BM25, grounding)
+corpus/amd_docs.jsonl   offline AMD documentation corpus
+model/qwen-2.5-0.5b.gguf
+sample_data/questions.jsonl
+scripts/                local helpers (start, stop, fetch, benchmark)
+```
+
+## Docker (grader path)
+
+```bash
+docker build -t amd-agent .
+rm -rf out && mkdir -p out
+docker run --rm --network none --cap-drop DAC_OVERRIDE \
+  --device=/dev/kfd --device=/dev/dri \
+  -v "$(pwd)/sample_data:/data" -v "$(pwd)/out:/output" \
+  amd-agent
+cat out/answers.jsonl
+```
+
+The image bundles the GGUF model and the offline corpus. `run.sh` starts the
+prebuilt `llama-server` once on port **8001**, waits for `/health`, then calls
+`app/main.py`. Nothing is downloaded at runtime.
+
 ## Quick start (Google Colab / local)
 
 ```bash
@@ -63,7 +97,8 @@ cd /content/amd
 cp .env.example .env
 # edit .env and set TAVILY_API_KEY=tvly-...
 
-# 2. Start llama.cpp with the bundled Qwen2.5-0.5B-Instruct GGUF
+# 2. Fetch prebuilt llama.cpp if needed, then start the bundled model
+bash scripts/fetch_llama.sh   # prebuilt binary only; safe to rerun
 bash scripts/start_llama.sh
 
 # 3. Ask a question
@@ -119,15 +154,16 @@ All settings are environment variables, documented in `.env.example`.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SEARCH_PROVIDER` | `tavily` | `tavily`, `qdrant`, or `local` |
-| `TAVILY_API_KEY` | - | Tavily demo key |
-| `LLM_BASE_URL` | `http://127.0.0.1:8099/v1` | llama.cpp OpenAI-compatible endpoint |
+| `TAVILY_API_KEY` | - | Tavily demo key; without it the agent uses `local` |
+| `OFFLINE_EVAL` | unset | `1` forces offline local JSONL search |
+| `LLM_BASE_URL` | `http://127.0.0.1:8001/v1` | llama.cpp OpenAI-compatible endpoint |
 | `PLANNER_MODE` | `auto` | `auto` skips the planner for short lookups, `always`, `off` |
 | `MAX_SNIPPETS` | `3` | evidence documents shown to the model |
 | `EVIDENCE_CHAR_BUDGET` | `1000` | hard cap on evidence characters |
 | `SNIPPET_CHAR_LIMIT` | `280` | characters kept per document |
 | `MAX_RESPONSE_WORDS` | `45` | answer length cap |
 | `MAX_SOURCES` | `3` | URLs returned |
-| `ANSWER_MAX_TOKENS` | `80` | output-token cap |
+| `ANSWER_MAX_TOKENS` | `96` | output-token cap |
 | `MAX_ROUNDS` | `2` | search rounds; round two is coverage-gated |
 | `GAP_MIN_COVERAGE` | `0.6` | skip the gap round above this keyword coverage |
 
@@ -161,7 +197,7 @@ The Qdrant provider needs no external service beyond your own infrastructure:
 SEARCH_PROVIDER=qdrant \
 QDRANT_URL=http://127.0.0.1:6333 \
 QDRANT_COLLECTION=amd_docs \
-QDRANT_EMBED_URL=http://127.0.0.1:8099/v1/embeddings \
+QDRANT_EMBED_URL=http://127.0.0.1:8001/v1/embeddings \
 QDRANT_EMBED_MODEL=nomic-embed-text \
 python -m amd_websearch "QUESTION"
 ```
@@ -183,8 +219,8 @@ Everything remains in `/content/amd/`:
 ## Measured footprint
 
 On the free Colab **2-vCPU CPU runtime** with the bundled Q4_K_M model, the
-defaults use roughly **480-530 prompt tokens and 80 output tokens** per query
-and finish in about **6-18 seconds** (simple lookup vs. planned query). On an
+defaults use roughly **480-530 prompt tokens and 80-96 output tokens** per query
+and finish in about **17-28 seconds** (simple lookup vs. planned query) in this CPU-only runtime; a warm MI300X run is much faster. On an
 MI300X with the llama.cpp ROCm build this prefill/generation cost is negligible,
 and the token caps keep cost low regardless of hardware.
 
